@@ -25,7 +25,7 @@ $this->call([
     \App\Models\User::create([
         'name' => 'Administrateur',
         'email' => 'admin@hopital.ml',
-        'password' => bcrypt('secret123'), // C'est le mot de passe
+        'password' => bcrypt('secret123'), 
         'role' => 'admin',
     ]);
 }

@@ -61,8 +61,11 @@
                                 </select>
                             </div>
                             <div class="col-md-6 mb-3">
-                                <label class="form-label fw-bold">Téléphone</label>
-                                <input type="text" name="telephone" class="form-control" value="{{ old('telephone', $patient->telephone) }}" required>
+                                <label class="form-label fw-bold">Téléphone (Mali)</label>
+                                <div class="input-group">
+                                    <span class="input-group-text">+223</span>
+                                    <input type="text" name="telephone" class="form-control" value="{{ old('telephone', $patient->telephone) }}" pattern="[24-9][0-9]{7}" title="8 chiffres (ex: 77001122)" required>
+                                </div>
                             </div>
                         </div>
 

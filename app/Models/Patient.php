@@ -55,4 +55,9 @@ public function ordonnances()
             'allergies' => 'encrypted',
         ];
     }
+
+    public function accesses()
+    {
+        return $this->hasMany(PatientAccess::class);
+    }
 }

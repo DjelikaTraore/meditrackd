@@ -66,6 +66,11 @@
                                     <i class="bi bi-graph-up-arrow me-2 text-info"></i> Rapports & Stats
                                 </a>
                             </li>
+                            <li class="nav-item mb-2">
+                                <a href="{{ route('admin.activity-logs') }}" class="nav-link text-white {{ request()->is('admin/activity-logs*') ? 'active' : '' }}">
+                                    <i class="bi bi-journal-text me-2 text-light"></i> Journal Audit
+                                </a>
+                            </li>
                             @endif
                         </ul>
                     </div>

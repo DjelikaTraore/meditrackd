@@ -49,8 +49,14 @@ class ConsultationController extends Controller
         
         if (!$isAdmin) {
             $userServices = $user->services()->pluck('services.id');
-            $consultations = $consultations->whereHas('patient', function($query) use ($userServices) {
-                $query->whereIn('service_id', $userServices);
+            $consultations = $consultations->whereHas('patient', function($query) use ($userServices, $user) {
+                $query->whereIn('service_id', $userServices)
+                      ->orWhereHas('accesses', function($q) use ($user) {
+                          $q->where('user_id', $user->id)
+                            ->where(function($exp) {
+                                $exp->whereNull('expires_at')->orWhere('expires_at', '>', now());
+                            });
+                      });
             });
         }
         
@@ -63,9 +69,26 @@ class ConsultationController extends Controller
      */
     public function create(Patient $patient)
     {
+        $user = Auth::user();
+        $isAdmin = $user->hasRole('admin') || $user->name === 'Administrateur';
+        
         // Vérifier si le médecin a accès à ce patient
-        if (!Auth::user()->hasRole('admin') && !Auth::user()->services()->pluck('services.id')->contains($patient->service_id)) {
-            abort(403, 'Accès non autorisé à ce patient.');
+        if (!$isAdmin) {
+            $userServices = $user->services()->pluck('services.id');
+            $hasServiceAccess = $userServices->contains($patient->service_id);
+            
+            if (!$hasServiceAccess) {
+                $hasCrossAccess = \App\Models\PatientAccess::where('user_id', $user->id)
+                    ->where('patient_id', $patient->id)
+                    ->where(function($q) {
+                        $q->whereNull('expires_at')->orWhere('expires_at', '>', now());
+                    })
+                    ->exists();
+                
+                if (!$hasCrossAccess) {
+                    abort(403, 'Accès non autorisé à ce patient.');
+                }
+            }
         }
         
         return view('consultations.create', compact('patient'));
@@ -78,10 +101,26 @@ class ConsultationController extends Controller
     {
         // 1. Récupère le patient manuellement pour être certain qu'il existe
         $patient = Patient::findOrFail($patientId);
+        $user = Auth::user();
+        $isAdmin = $user->hasRole('admin') || $user->name === 'Administrateur';
         
         // 2. Vérifier si le médecin a accès à ce patient
-        if (!Auth::user()->hasRole('admin') && !Auth::user()->services()->pluck('services.id')->contains($patient->service_id)) {
-            abort(403, 'Accès non autorisé à ce patient.');
+        if (!$isAdmin) {
+            $userServices = $user->services()->pluck('services.id');
+            $hasServiceAccess = $userServices->contains($patient->service_id);
+            
+            if (!$hasServiceAccess) {
+                $hasCrossAccess = \App\Models\PatientAccess::where('user_id', $user->id)
+                    ->where('patient_id', $patient->id)
+                    ->where(function($q) {
+                        $q->whereNull('expires_at')->orWhere('expires_at', '>', now());
+                    })
+                    ->exists();
+                
+                if (!$hasCrossAccess) {
+                    abort(403, 'Accès non autorisé à ce patient.');
+                }
+            }
         }
 
         // 3. Validation
@@ -103,10 +142,26 @@ class ConsultationController extends Controller
     public function generatePDF($id)
     {
         $consultation = Consultation::with('patient')->findOrFail($id);
+        $user = Auth::user();
+        $isAdmin = $user->hasRole('admin') || $user->name === 'Administrateur';
         
         // Vérifier si le médecin a accès à cette consultation
-        if (!Auth::user()->hasRole('admin') && !Auth::user()->services()->pluck('services.id')->contains($consultation->patient->service_id)) {
-            abort(403, 'Accès non autorisé à cette consultation.');
+        if (!$isAdmin) {
+            $userServices = $user->services()->pluck('services.id');
+            $hasServiceAccess = $userServices->contains($consultation->patient->service_id);
+            
+            if (!$hasServiceAccess) {
+                $hasCrossAccess = \App\Models\PatientAccess::where('user_id', $user->id)
+                    ->where('patient_id', $consultation->patient_id)
+                    ->where(function($q) {
+                        $q->whereNull('expires_at')->orWhere('expires_at', '>', now());
+                    })
+                    ->exists();
+                
+                if (!$hasCrossAccess) {
+                    abort(403, 'Accès non autorisé à cette consultation.');
+                }
+            }
         }
 
         $pdf = Pdf::loadView('consultations.pdf', [
@@ -124,16 +179,15 @@ class ConsultationController extends Controller
         return $request->validate([
             'date_consultation' => 'required|date|before_or_equal:today',
             'symptomes'         => 'nullable|string|max:1000',
-            'diagnostic'        => 'required|string|min:10|max:2000',
-            'traitement'        => 'required|string|min:10|max:2000',
+            'diagnostic'        => 'required|string|max:2000',
+            'traitement'        => 'nullable|string|max:2000',
             'poids'             => 'nullable|numeric|min:0.5|max:300',
             'tension'           => 'nullable|string|regex:/^[0-9]{1,3}\/[0-9]{1,3}$/',
+            'notes_supplementaires' => 'nullable|string|max:2000',
         ], [
             'date_consultation.required' => 'La date est requise.',
             'diagnostic.required'        => 'Un diagnostic est obligatoire.',
-            'diagnostic.min'             => 'Le diagnostic doit être plus détaillé (min 10 caractères).',
             'traitement.required'        => 'Le traitement est obligatoire.',
-            'traitement.min'             => 'Le traitement doit être plus détaillé (min 10 caractères).',
             'tension.regex'              => 'Format tension invalide (ex: 12/8).',
         ]);
     }

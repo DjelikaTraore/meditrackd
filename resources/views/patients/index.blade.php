@@ -29,11 +29,16 @@
         <h2 class="fw-bold text-success m-0">
             <i class="bi bi-people-fill me-2"></i>Liste des Patients
         </h2>
-        @if(auth()->user()->name === 'Administrateur' || auth()->user()->hasAnyRole(['admin', 'administrateur']) || auth()->user()->hasRole('medecin') || auth()->user()->role === 'medecin' || auth()->user()->role === 'admin')
-            <a href="{{ route('patients.create') }}" class="btn btn-success rounded-pill shadow-sm">
-                <i class="bi bi-person-plus-fill me-1"></i> Ajouter un patient
+        <div class="d-flex align-items-center gap-2">
+            <a href="{{ route('patients.access-history') }}" class="btn btn-outline-info rounded-pill shadow-sm">
+                <i class="bi bi-clock-history me-1"></i> Historique accès
             </a>
-        @endif
+            @if(auth()->user()->name === 'Administrateur' || auth()->user()->hasAnyRole(['admin', 'administrateur']) || auth()->user()->hasRole('medecin') || auth()->user()->role === 'medecin' || auth()->user()->role === 'admin')
+                <a href="{{ route('patients.create') }}" class="btn btn-success rounded-pill shadow-sm">
+                    <i class="bi bi-person-plus-fill me-1"></i> Ajouter un patient
+                </a>
+            @endif
+        </div>
     </div>
 
     <!-- Filtre cas critique -->
@@ -123,19 +128,40 @@
                                     @endif
                                     <td>
                                         <div class="d-flex justify-content-center gap-1">
-                                            <a href="{{ route('patients.show', $patient->id) }}" 
-                                               class="btn btn-sm btn-outline-primary" title="Voir les détails">
-                                                <i class="bi bi-eye"></i>
-                                            </a>
-                                            @if(auth()->user()->name === 'Administrateur' || auth()->user()->hasAnyRole(['admin', 'administrateur']) || auth()->user()->hasRole('medecin') || auth()->user()->role === 'medecin' || auth()->user()->role === 'admin')
-                                                <a href="{{ route('patients.edit', $patient->id) }}" 
-                                                   class="btn btn-sm btn-outline-warning" title="Modifier">
-                                                    <i class="bi bi-pencil"></i>
+                                            @php
+                                                $user = auth()->user();
+                                                $isAdmin = $user->hasRole('admin') || $user->name === 'Administrateur';
+                                                $hasServiceAccess = $isAdmin || $user->services->contains('id', $patient->service_id);
+                                                $hasCrossAccess = !$hasServiceAccess && $user->patientAccesses()
+                                                    ->where('patient_id', $patient->id)
+                                                    ->where(function($q) {
+                                                        $q->whereNull('expires_at')->orWhere('expires_at', '>', now());
+                                                    })->exists();
+                                            @endphp
+
+                                            @if($hasServiceAccess || $hasCrossAccess)
+                                                <a href="{{ route('patients.show', $patient->id) }}" 
+                                                   class="btn btn-sm btn-outline-primary" title="Voir les détails">
+                                                    <i class="bi bi-eye"></i>
                                                 </a>
-                                                <a href="{{ route('consultations.create', $patient->id) }}"
-                                                   class="btn btn-sm btn-outline-info" title="Ajouter une consultation">
-                                                    <i class="bi bi-plus-circle"></i>
+                                                @if($isAdmin || $user->hasRole('medecin'))
+                                                    <a href="{{ route('patients.edit', $patient->id) }}" 
+                                                       class="btn btn-sm btn-outline-warning" title="Modifier">
+                                                        <i class="bi bi-pencil"></i>
+                                                    </a>
+                                                    <a href="{{ route('consultations.create', $patient->id) }}"
+                                                       class="btn btn-sm btn-outline-info" title="Ajouter une consultation">
+                                                        <i class="bi bi-plus-circle"></i>
+                                                    </a>
+                                                @endif
+                                            @else
+                                                <a href="{{ route('patients.request-access', $patient->id) }}" 
+                                                   class="btn btn-sm btn-info text-white" title="Demander l'accès">
+                                                    <i class="bi bi-unlock"></i> Demander l'accès
                                                 </a>
+                                            @endif
+
+                                            @if($isAdmin || $user->hasRole('medecin'))
                                                 <form action="{{ route('patients.destroy', $patient->id) }}" 
                                                       method="POST" class="d-inline" 
                                                       onsubmit="return confirm('Êtes-vous sûr de vouloir supprimer ce patient ?')">

@@ -42,7 +42,7 @@
 
                     <div class="info-row mb-3">
                         <small class="text-info text-uppercase fw-bold d-block">Téléphone</small>
-                        <span class="text-white h5">{{ $patient->telephone }}</span>
+                        <span class="text-white h5">+223 {{ $patient->telephone }}</span>
                     </div>
 
                     <div class="info-row mb-3">
@@ -104,9 +104,13 @@
                                     @foreach($consultations as $c)
                                     <tr>
                                         <td class="text-dark fw-bold">{{ \Carbon\Carbon::parse($c->date_consultation)->format('d/m/Y') }}</td>
-                                        <td class="text-dark small">{{ Str::limit($c->diagnostic, 40) }}</td>
-                                        <td class="text-dark small">{{ $c->tension ?? '-' }}__
-                                            {{ $c->poids ?? '-' }}kg</td>
+                                        <td class="text-dark small">
+                                            {{ Str::limit($c->diagnostic, 40) }}
+                                            @if($c->notes_supplementaires)
+                                                <i class="bi bi-info-circle text-primary ms-1" title="{{ $c->notes_supplementaires }}"></i>
+                                            @endif
+                                        </td>
+                                        <td class="text-dark small">{{ $c->tension ?? '-' }} — {{ $c->poids ?? '-' }}kg</td>
                                     </tr>
                                     @endforeach
                                 </tbody>

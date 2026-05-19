@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\User;
 use App\Models\Service;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Hash;
 
 class UserController extends Controller
 {
@@ -22,25 +23,36 @@ class UserController extends Controller
 
     public function store(Request $request)
     {
-        $request->validate([
+        $rules = [
             'name' => 'required|string|max:255',
             'email' => 'required|string|email|max:255|unique:users',
             'password' => 'required|string|min:8|confirmed',
-            'role' => 'required|in:admin,medecin,secretaire',
+            'role' => 'required|in:admin,medecin,secretaire,stagiaire',
+            'security_question' => 'required|string|max:255',
+            'security_answer' => 'required|string|max:255',
             'services' => 'array|exists:services,id'
-        ]);
+        ];
+
+        if ($request->role === 'stagiaire') {
+            $rules['expires_at'] = 'required|date|after:today';
+        }
+
+        $request->validate($rules);
 
         $user = User::create([
             'name' => $request->name,
             'email' => $request->email,
-            'password' => bcrypt($request->password),
+            'password' => Hash::make($request->password),
+            'security_question' => $request->security_question,
+            'security_answer' => $request->security_answer,
+            'expires_at' => $request->expires_at,
         ]);
 
         // Assigner le rôle
         $user->assignRole($request->role);
 
-        // Synchroniser les services si c'est un médecin
-        if ($request->role === 'medecin' && $request->has('services')) {
+        // Synchroniser les services pour les médecins et stagiaires
+        if (in_array($request->role, ['medecin', 'stagiaire']) && $request->has('services')) {
             $user->services()->sync($request->services);
         }
 
@@ -62,7 +74,7 @@ class UserController extends Controller
         // Synchroniser les services sélectionnés (many-to-many)
         $user->services()->sync($request->input('services', []));
 
-        return redirect()->route('admin.users.index')->with('success', 'Médecin mis à jour !');
+        return redirect()->route('admin.users.index')->with('success', 'Utilisateur mis à jour !');
     }
 
     public function destroy($id)

@@ -61,8 +61,11 @@
 
                 <div class="row g-3 mb-3">
                     <div class="col-md-6">
-                        <label class="form-label fw-bold">Téléphone</label>
-                        <input type="text" name="telephone" class="form-control" value="{{ old('telephone') }}" placeholder="Ex: 70000000">
+                        <label class="form-label fw-bold">Téléphone (Mali)</label>
+                        <div class="input-group">
+                            <span class="input-group-text">+223</span>
+                            <input type="text" name="telephone" class="form-control" value="{{ old('telephone') }}" placeholder="Ex: 77001122" pattern="[24-9][0-9]{7}" title="8 chiffres (ex: 77001122)" required>
+                        </div>
                     </div>
                     <div class="col-md-6">
                         <label class="form-label fw-bold">Adresse</label>

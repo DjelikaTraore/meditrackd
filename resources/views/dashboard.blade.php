@@ -224,7 +224,47 @@
     @endif
 </div>
 
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+    // Lignes de tableau cliquables
+    const clickableRows = document.querySelectorAll('.clickable-row');
+    clickableRows.forEach(row => {
+        row.addEventListener('click', function() {
+            window.location.href = this.dataset.href;
+        });
+    });
 
-
+    // Initialisation du graphique (Chart.js)
+    const canvas = document.getElementById('bloodChart');
+    if (canvas) {
+        const labels = JSON.parse(canvas.dataset.labels);
+        const values = JSON.parse(canvas.dataset.values);
+        
+        new Chart(canvas, {
+            type: 'pie',
+            data: {
+                labels: labels,
+                datasets: [{
+                    data: values,
+                    backgroundColor: [
+                        '#dc3545', '#0dcaf0', '#ffc107', '#198754', 
+                        '#6f42c1', '#fd7e14', '#20c997', '#0d6efd'
+                    ],
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        position: 'right',
+                    }
+                }
+            }
+        });
+    }
+});
+</script>
 
 @endsection

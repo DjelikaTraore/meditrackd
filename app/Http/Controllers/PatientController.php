@@ -39,23 +39,41 @@ class PatientController extends Controller
         if ($user->hasRole('admin') || $user->name === 'Administrateur') {
             // Admin voit tous les patients - aucun filtre
         } else {
-            // Médecin - filtre par ses services
+            // Médecin - filtre par ses services, sauf s'il fait une recherche précise
             $userServices = $user->services()->pluck('services.id');
             
-            if ($userServices->isNotEmpty()) {
-                $query->whereIn('service_id', $userServices);
-            } else {
-                // Si le médecin n'a pas de services, retourner une liste vide
-                $query->whereRaw('1 = 0'); // Force empty result
+            if (!$request->filled('search')) {
+                if ($userServices->isNotEmpty()) {
+                    $query->whereIn('service_id', $userServices);
+                } else {
+                    $query->whereRaw('1 = 0'); // Force empty result
+                }
             }
+            // En cas de recherche, on laisse le médecin chercher partout pour qu'il puisse demander l'accès
         }
 
         if ($request->filled('search')) {
             $search = $request->search;
-            $query->where(function($q) use ($search) {
-                $q->where('nom', 'like', '%' . $search . '%')
-                  ->orWhere('prenom', 'like', '%' . $search . '%')
-                  ->orWhere('telephone', 'like', '%' . $search . '%');
+            $terms = explode(' ', $search);
+            
+            $query->where(function($q) use ($search, $terms) {
+                // Recherche par ID exact
+                if (is_numeric($search)) {
+                    $q->orWhere('id', $search);
+                }
+                
+                // Recherche par termes
+                foreach ($terms as $term) {
+                    if (empty($term)) continue;
+                    $q->where(function($sub) use ($term) {
+                        $sub->where('nom', 'like', '%' . $term . '%')
+                            ->orWhere('prenom', 'like', '%' . $term . '%')
+                            ->orWhere('telephone', 'like', '%' . $term . '%')
+                            ->orWhereHas('service', function($s) use ($term) {
+                                $s->where('name', 'like', '%' . $term . '%');
+                            });
+                    });
+                }
             });
         }
 
@@ -114,7 +132,7 @@ class PatientController extends Controller
             'prenom' => 'required|string|max:255',
             'sexe' => 'required|in:M,F',
             'date_naissance' => 'required|date',
-            'telephone' => 'required|string|regex:/^[67][0-9]{7}$/',
+            'telephone' => 'required|string|regex:/^[24-9][0-9]{7}$/',
             'adresse' => 'nullable|string|max:255',
             'groupe_sanguin' => 'nullable|string|max:10',
             'antecedents' => 'nullable|string',
@@ -137,26 +155,39 @@ class PatientController extends Controller
 
     public function edit($id)
     {
-        $patient = Patient::findOrFail($id);
+        $patient = Patient::with('service')->findOrFail($id);
         
         $user = Auth::user();
-        $isAdmin = $user->hasRole('admin');
+        $isAdmin = $user->hasRole('admin') || $user->name === 'Administrateur';
         
-        // DEBUG: Forcer l'admin SEULEMENT si c'est vraiment l'admin par nom
-        if ($user->name === 'Administrateur') {
-            $isAdmin = true;
+        // Vérifier l'accès
+        if (!$isAdmin) {
+            $userServices = $user->services()->pluck('services.id');
+            $hasServiceAccess = $userServices->contains($patient->service_id);
+            
+            if (!$hasServiceAccess) {
+                $hasCrossAccess = \App\Models\PatientAccess::where('user_id', $user->id)
+                    ->where('patient_id', $patient->id)
+                    ->where(function($q) {
+                        $q->whereNull('expires_at')->orWhere('expires_at', '>', now());
+                    })
+                    ->exists();
+                
+                if (!$hasCrossAccess) {
+                    abort(403, 'Accès non autorisé à ce patient.');
+                }
+            }
         }
         
-        // Vérifier si le médecin a accès à ce patient (admin a toujours accès)
-        if ($user->name !== 'Administrateur' && !$isAdmin && !$user->services()->pluck('services.id')->contains($patient->service_id)) {
-            abort(403, 'Accès non autorisé à ce patient.');
-        }
-        
-        // Admin voit tous les services, médecin voit seulement ses services
-        if ($user->name === 'Administrateur' || $isAdmin) {
+        // Admin voit tous les services, médecin voit ses propres services
+        if ($isAdmin) {
             $services = Service::all();
         } else {
             $services = $user->services;
+            // Toujours inclure le service actuel pour l'affichage
+            if (!$services->contains('id', $patient->service_id)) {
+                $services->push($patient->service);
+            }
         }
         return view('patients.edit', compact('patient', 'services'));
     }
@@ -164,30 +195,40 @@ class PatientController extends Controller
     public function update(Request $request, Patient $patient)
     {
         $user = Auth::user();
-        $isAdmin = $user->hasRole('admin');
+        $isAdmin = $user->hasRole('admin') || $user->name === 'Administrateur';
         
-        // DEBUG: Forcer l'admin SEULEMENT si c'est vraiment l'admin par nom
-        if ($user->name === 'Administrateur') {
-            $isAdmin = true;
-        }
-        
-        // Vérifier si le médecin a accès à ce patient (admin a toujours accès)
-        if ($user->name !== 'Administrateur' && !$isAdmin && !$user->services()->pluck('services.id')->contains($patient->service_id)) {
-            abort(403, 'Accès non autorisé à ce patient.');
-        }
-        
-        // Pour les médecins, limiter les services à leurs propres services
+        // Vérifier l'accès
         if (!$isAdmin) {
-            $request->merge([
-                'service_id' => $user->services()->pluck('services.id')->contains($request->service_id) ? $request->service_id : $patient->service_id
-            ]);
+            $userServices = $user->services()->pluck('services.id');
+            $hasServiceAccess = $userServices->contains($patient->service_id);
+            
+            if (!$hasServiceAccess) {
+                $hasCrossAccess = \App\Models\PatientAccess::where('user_id', $user->id)
+                    ->where('patient_id', $patient->id)
+                    ->where(function($q) {
+                        $q->whereNull('expires_at')->orWhere('expires_at', '>', now());
+                    })
+                    ->exists();
+                
+                if (!$hasCrossAccess) {
+                    abort(403, 'Accès non autorisé à ce patient.');
+                }
+            }
+        }
+        
+        // Pour les médecins, limiter les services à leurs propres services + le service actuel
+        if (!$isAdmin) {
+            $userServicesIds = $user->services()->pluck('services.id');
+            if (!$userServicesIds->contains($request->service_id) && $request->service_id != $patient->service_id) {
+                $request->merge(['service_id' => $patient->service_id]);
+            }
         }
         $validated = $request->validate([
             'nom' => 'required|string|max:255',
             'prenom' => 'required|string|max:255',
             'sexe' => 'required|in:M,F',
             'date_naissance' => 'required|date',
-            'telephone' => 'required|string|regex:/^[67][0-9]{7}$/',
+            'telephone' => 'required|string|regex:/^[24-9][0-9]{7}$/',
             'adresse' => 'nullable|string|max:255',
             'groupe_sanguin' => 'nullable|string|max:10',
             'antecedents' => 'nullable|string',
@@ -198,10 +239,34 @@ class PatientController extends Controller
         $validated['is_critique'] = $request->has('is_critique');
         $patient->update($validated);
 
+        // Si le patient a été transféré dans un service du médecin, rendre l'accès inter-service permanent (ou le supprimer car inutile)
+        if (!$isAdmin) {
+            $userServicesIds = $user->services()->pluck('services.id');
+            if ($userServicesIds->contains($patient->service_id)) {
+                \App\Models\PatientAccess::where('user_id', $user->id)
+                    ->where('patient_id', $patient->id)
+                    ->update(['expires_at' => null]); // Devient permanent/validé
+            }
+        }
+
+        $oldServiceId = $patient->getOriginal('service_id');
+        $newServiceId = $patient->service_id;
+
+        if ($oldServiceId != $newServiceId) {
+            $oldServiceName = \App\Models\Service::find($oldServiceId)->name ?? 'Inconnu';
+            $newServiceName = \App\Models\Service::find($newServiceId)->name ?? 'Inconnu';
+            $details = "Transfert de service : $oldServiceName -> $newServiceName";
+            $action = 'Transfert patient';
+        } else {
+            $details = null;
+            $action = 'Mise à jour dossier';
+        }
+
         ActivityLog::create([
             'user_id' => Auth::id(),
-            'action' => 'Mise à jour dossier',
+            'action' => $action,
             'patient_name' => $patient->nom . ' ' . $patient->prenom,
+            'details' => $details
         ]);
 
         return redirect()->route('patients.index')->with('success', 'Dossier mis à jour.');
@@ -212,16 +277,27 @@ class PatientController extends Controller
         $patient = Patient::with('service')->findOrFail($id);
         
         $user = Auth::user();
-        $isAdmin = $user->hasRole('admin');
-        
-        // DEBUG: Forcer l'admin SEULEMENT si c'est vraiment l'admin par nom
-        if ($user->name === 'Administrateur') {
-            $isAdmin = true;
-        }
+        $isAdmin = $user->hasRole('admin') || $user->name === 'Administrateur';
         
         // Vérifier si le médecin a accès à ce patient (admin a toujours accès)
-        if ($user->name !== 'Administrateur' && !$isAdmin && !$user->services()->pluck('services.id')->contains($patient->service_id)) {
-            abort(403, 'Accès non autorisé à ce patient.');
+        if (!$isAdmin) {
+            $userServices = $user->services()->pluck('services.id');
+            $hasServiceAccess = $userServices->contains($patient->service_id);
+            
+            if (!$hasServiceAccess) {
+                // Vérifier s'il y a un accès inter-service valide
+                $hasCrossAccess = \App\Models\PatientAccess::where('user_id', $user->id)
+                    ->where('patient_id', $patient->id)
+                    ->where(function($q) {
+                        $q->whereNull('expires_at')->orWhere('expires_at', '>', now());
+                    })
+                    ->exists();
+                
+                if (!$hasCrossAccess) {
+                    return redirect()->route('patients.request-access', $patient->id)
+                        ->with('warning', 'Vous n\'avez pas accès à ce dossier. Vous pouvez faire une demande d\'accès inter-service.');
+                }
+            }
         }
         
         $consultations = $patient->consultations()->orderBy('date_consultation', 'desc')->get();
@@ -240,16 +316,23 @@ class PatientController extends Controller
         $patient = Patient::findOrFail($id);
         
         $user = Auth::user();
-        $isAdmin = $user->hasRole('admin');
+        $isAdmin = $user->hasRole('admin') || $user->name === 'Administrateur';
         
-        // DEBUG: Forcer l'admin SEULEMENT si c'est vraiment l'admin par nom
-        if ($user->name === 'Administrateur') {
-            $isAdmin = true;
-        }
-        
-        // Vérifier si le médecin a accès à ce patient (admin a toujours accès)
-        if ($user->name !== 'Administrateur' && !$isAdmin && !$user->services()->pluck('services.id')->contains($patient->service_id)) {
-            abort(403, 'Accès non autorisé à ce patient.');
+        // Vérifier l'accès
+        if (!$isAdmin) {
+            $userServices = $user->services()->pluck('services.id');
+            if (!$userServices->contains($patient->service_id)) {
+                $hasCrossAccess = \App\Models\PatientAccess::where('user_id', $user->id)
+                    ->where('patient_id', $patient->id)
+                    ->where(function($q) {
+                        $q->whereNull('expires_at')->orWhere('expires_at', '>', now());
+                    })
+                    ->exists();
+                
+                if (!$hasCrossAccess) {
+                    abort(403, 'Accès non autorisé à ce patient.');
+                }
+            }
         }
         
         $patient->delete();

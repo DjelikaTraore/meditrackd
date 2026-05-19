@@ -6,7 +6,9 @@ use App\Http\Controllers\{
     DashboardController,
     ConsultationController,
     OrdonnanceController,
-    UserController
+    UserController,
+    CrossServicePatientController,
+    ActivityLogController
 };
 use App\Http\Controllers\Auth\DoctorRegisterController;
 use App\Http\Controllers\Admin\{
@@ -45,7 +47,7 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/', [AdminController::class, 'index'])->name('index');
         Route::resource('services', ServiceController::class);
         Route::post('services/{service}/assign-medecin', [ServiceController::class, 'assignMedecin'])->name('services.assign-medecin');
-        Route::resource('users', UserController::class); // Nettoyé : suppression du doublon
+        Route::resource('users', UserController::class);
         
         // Routes pour la gestion des assignations médecins-services
         Route::get('medecins-services', [MedecinServiceController::class, 'index'])->name('medecins-services.index');
@@ -60,10 +62,15 @@ Route::middleware(['auth'])->group(function () {
         Route::get('reports', [\App\Http\Controllers\ReportController::class, 'index'])->name('reports.index');
         Route::get('reports/export', [\App\Http\Controllers\ReportController::class, 'exportPDF'])->name('reports.export');
         
-        });
+        // --- JOURNAL D'ACTIVITÉS ---
+        Route::get('activity-logs', [ActivityLogController::class, 'index'])->name('activity-logs');
+    });
 
     // --- GESTION PATIENTS ---
     Route::resource('patients', PatientController::class);
+    Route::get('patients/{patient}/request-access', [CrossServicePatientController::class, 'requestAccess'])->name('patients.request-access');
+    Route::post('patients/{patient}/process-access', [CrossServicePatientController::class, 'processAccess'])->name('patients.process-access');
+    Route::get('patients-access-history', [CrossServicePatientController::class, 'accessHistory'])->name('patients.access-history');
 
     // --- GESTION CONSULTATIONS ---
     Route::get('consultations', [ConsultationController::class, 'index'])->name('consultations.index');

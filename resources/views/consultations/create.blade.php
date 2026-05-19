@@ -51,13 +51,16 @@
                     <div class="col-12">
                         <label class="form-label fw-bold text-primary">Diagnostic</label>
                         <textarea name="diagnostic" class="form-control" rows="3" required>{{ old('diagnostic') }}</textarea>
-                        <div class="form-text">Minimum 10 caractères.</div>
                     </div>
 
                     <div class="col-12">
-                        <label class="form-label fw-bold text-success">Traitement / Ordonnance</label>
-                        <textarea name="traitement" class="form-control" rows="4" required>{{ old('traitement') }}</textarea>
-                        <div class="form-text">Minimum 10 caractères.</div>
+                        <label class="form-label fw-bold text-success">Traitement / Ordonnance (Optionnel)</label>
+                        <textarea name="traitement" class="form-control" rows="4">{{ old('traitement') }}</textarea>
+                    </div>
+
+                    <div class="col-12">
+                        <label class="form-label fw-bold text-secondary">Notes / Données supplémentaires (Optionnel)</label>
+                        <textarea name="notes_supplementaires" class="form-control" rows="3" placeholder="Ajoutez ici d'autres données ou observations spécifiques à cette consultation...">{{ old('notes_supplementaires') }}</textarea>
                     </div>
                 </div>
 

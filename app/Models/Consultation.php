@@ -19,6 +19,7 @@ class Consultation extends Model
         'traitement',
         'poids',
         'tension',
+        'notes_supplementaires',
         'created_at',
         'updated_at'
     ];
@@ -40,6 +41,7 @@ class Consultation extends Model
             'symptomes' => 'encrypted',
             'diagnostic' => 'encrypted',
             'traitement' => 'encrypted',
+            'notes_supplementaires' => 'encrypted',
             'poids' => 'float',
         ];
     }

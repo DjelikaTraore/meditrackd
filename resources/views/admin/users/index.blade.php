@@ -46,6 +46,22 @@
                                     }}">
                                         {{ ucfirst($roleName ?: 'Utilisateur') }}
                                     </span>
+
+                                    @if($isStagiaire && $user->expires_at)
+                                        <div class="mt-1">
+                                            @php
+                                                $remaining = now()->diffForHumans($user->expires_at, [
+                                                    'syntax' => \Carbon\CarbonInterface::DIFF_RELATIVE_TO_NOW,
+                                                    'parts' => 1
+                                                ]);
+                                                $isExpired = now()->isAfter($user->expires_at);
+                                            @endphp
+                                            <span class="badge {{ $isExpired ? 'bg-dark' : 'bg-warning text-dark' }} border shadow-sm" style="font-size: 0.75rem;">
+                                                <i class="bi bi-hourglass-split me-1"></i>
+                                                {{ $isExpired ? 'Expiré' : 'Expire ' . $remaining }}
+                                            </span>
+                                        </div>
+                                    @endif
                                 </td>
                                 <td>
                                     @if($user->services->count() > 0)

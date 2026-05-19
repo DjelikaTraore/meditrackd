@@ -36,6 +36,10 @@
         <p><strong>Diagnostic :</strong><br> {{ $consultation->diagnostic }}</p>
         <br>
         <p><strong>Traitement prescrit :</strong><br> {{ $consultation->traitement }}</p>
+        @if($consultation->notes_supplementaires)
+            <br>
+            <p><strong>Notes complémentaires :</strong><br> {{ $consultation->notes_supplementaires }}</p>
+        @endif
     </div>
 
     <div class="footer">

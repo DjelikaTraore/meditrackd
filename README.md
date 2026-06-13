@@ -21,3 +21,14 @@ Suivez ces étapes pour déployer et tester l'application en local :
 ```bash
 git clone [https://github.com/VOTRE_NOM_UTILISATEUR/meditrackd.git](https://github.com/VOTRE_NOM_UTILISATEUR/meditrackd.git)
 cd meditrackd
+
+## Comptes de test pour l'évaluation
+
+Pour tester les différents rôles et privilèges du système (RBAC), vous pouvez utiliser les identifiants par défaut suivants :
+
+### 1. Profil Administrateur
+- **Email :** `admin@hopital.ml`
+- **Mot de passe :** `password`
+
+### Creer des compte medecin et stagiaire a la page login
+

@@ -14,13 +14,13 @@ class PatientController extends Controller
     public function __construct()
     {
         $this->middleware('auth');
-        
+
         // Les stagiaires ne peuvent que voir (index, show)
         $this->middleware(function ($request, $next) {
             $user = Auth::user();
             $isAdmin = $user->hasRole('admin') || $user->name === 'Administrateur';
             $isMedecin = $user->hasRole('medecin');
-            
+
             if (!$isAdmin && !$isMedecin && $user->hasRole('stagiaire')) {
                 if (in_array($request->route()->getActionMethod(), ['create', 'store', 'edit', 'update', 'destroy'])) {
                     abort(403, 'Les stagiaires ne sont pas autorisés à effectuer cette action.');
@@ -34,14 +34,14 @@ class PatientController extends Controller
     {
         $query = Patient::with('service');
         $user = Auth::user();
-        
+
         // Si c'est l'admin, pas de filtre
         if ($user->hasRole('admin') || $user->name === 'Administrateur') {
             // Admin voit tous les patients - aucun filtre
         } else {
             // Médecin - filtre par ses services, sauf s'il fait une recherche précise
             $userServices = $user->services()->pluck('services.id');
-            
+
             if (!$request->filled('search')) {
                 if ($userServices->isNotEmpty()) {
                     $query->whereIn('service_id', $userServices);
@@ -55,7 +55,7 @@ class PatientController extends Controller
         if ($request->filled('search')) {
             $search = $request->search;
             $cleanSearch = str_replace(' ', '', $search);
-            
+
             $query->where(function($q) use ($search, $cleanSearch) {
                 // Recherche spécifique par ID (ex: #2 ou id:2)
                 if (preg_match('/^(id:|#)\s*(\d+)$/i', trim($search), $matches)) {
@@ -67,7 +67,7 @@ class PatientController extends Controller
                 if (is_numeric($search)) {
                     $q->orWhere('id', $search);
                 }
-                
+
                 // Recherche par téléphone exact (si la recherche nettoyée contient 8 chiffres)
                 if (is_numeric($cleanSearch) && strlen($cleanSearch) === 8) {
                     $q->orWhere('telephone', $cleanSearch);
@@ -107,19 +107,19 @@ class PatientController extends Controller
         // Limiter les services selon le rôle de l'utilisateur
         $user = Auth::user();
         $isAdmin = $user->hasRole('admin');
-        
+
         // DEBUG: Forcer l'admin SEULEMENT si c'est vraiment l'admin par nom
         if ($user->name === 'Administrateur') {
             $isAdmin = true;
         }
-        
+
         // Admin voit tous les services, médecin voit seulement ses services
         if ($user->name === 'Administrateur' || $isAdmin) {
             $services = Service::all();
         } else {
             $services = $user->services;
         }
-            
+
         return view('patients.create', compact('services'));
     }
 
@@ -127,12 +127,12 @@ class PatientController extends Controller
     {
         $user = Auth::user();
         $isAdmin = $user->hasRole('admin');
-        
+
         // DEBUG: Forcer l'admin SEULEMENT si c'est vraiment l'admin par nom
         if ($user->name === 'Administrateur') {
             $isAdmin = true;
         }
-        
+
         // Pour les médecins, valider que le service appartient à leurs services
         if (!$isAdmin) {
             $userServices = $user->services()->pluck('services.id');
@@ -155,11 +155,12 @@ class PatientController extends Controller
         ]);
 
         $validated['is_critique'] = $request->has('is_critique');
-        
+
         $patient = Patient::create($validated);
 
         ActivityLog::create([
             'user_id' => Auth::id(),
+            'ip_address' => request()->ip(),
             'action' => 'Création patient',
             'patient_name' => $patient->nom . ' ' . $patient->prenom,
         ]);
@@ -170,15 +171,15 @@ class PatientController extends Controller
     public function edit($id)
     {
         $patient = Patient::with('service')->findOrFail($id);
-        
+
         $user = Auth::user();
         $isAdmin = $user->hasRole('admin') || $user->name === 'Administrateur';
-        
+
         // Vérifier l'accès
         if (!$isAdmin) {
             $userServices = $user->services()->pluck('services.id');
             $hasServiceAccess = $userServices->contains($patient->service_id);
-            
+
             if (!$hasServiceAccess) {
                 $hasCrossAccess = \App\Models\PatientAccess::where('user_id', $user->id)
                     ->where('patient_id', $patient->id)
@@ -186,13 +187,13 @@ class PatientController extends Controller
                         $q->whereNull('expires_at')->orWhere('expires_at', '>', now());
                     })
                     ->exists();
-                
+
                 if (!$hasCrossAccess) {
                     abort(403, 'Accès non autorisé à ce patient.');
                 }
             }
         }
-        
+
         // Admin voit tous les services, médecin voit ses propres services
         if ($isAdmin) {
             $services = Service::all();
@@ -210,12 +211,12 @@ class PatientController extends Controller
     {
         $user = Auth::user();
         $isAdmin = $user->hasRole('admin') || $user->name === 'Administrateur';
-        
+
         // Vérifier l'accès
         if (!$isAdmin) {
             $userServices = $user->services()->pluck('services.id');
             $hasServiceAccess = $userServices->contains($patient->service_id);
-            
+
             if (!$hasServiceAccess) {
                 $hasCrossAccess = \App\Models\PatientAccess::where('user_id', $user->id)
                     ->where('patient_id', $patient->id)
@@ -223,13 +224,13 @@ class PatientController extends Controller
                         $q->whereNull('expires_at')->orWhere('expires_at', '>', now());
                     })
                     ->exists();
-                
+
                 if (!$hasCrossAccess) {
                     abort(403, 'Accès non autorisé à ce patient.');
                 }
             }
         }
-        
+
         // Pour les médecins, limiter les services à leurs propres services + le service actuel
         if (!$isAdmin) {
             $userServicesIds = $user->services()->pluck('services.id');
@@ -278,6 +279,7 @@ class PatientController extends Controller
 
         ActivityLog::create([
             'user_id' => Auth::id(),
+             'ip_address' => request()->ip(),
             'action' => $action,
             'patient_name' => $patient->nom . ' ' . $patient->prenom,
             'details' => $details
@@ -289,15 +291,15 @@ class PatientController extends Controller
     public function show($id)
     {
         $patient = Patient::with('service')->findOrFail($id);
-        
+
         $user = Auth::user();
         $isAdmin = $user->hasRole('admin') || $user->name === 'Administrateur';
-        
+
         // Vérifier si le médecin a accès à ce patient (admin a toujours accès)
         if (!$isAdmin) {
             $userServices = $user->services()->pluck('services.id');
             $hasServiceAccess = $userServices->contains($patient->service_id);
-            
+
             if (!$hasServiceAccess) {
                 // Vérifier s'il y a un accès inter-service valide
                 $hasCrossAccess = \App\Models\PatientAccess::where('user_id', $user->id)
@@ -306,18 +308,19 @@ class PatientController extends Controller
                         $q->whereNull('expires_at')->orWhere('expires_at', '>', now());
                     })
                     ->exists();
-                
+
                 if (!$hasCrossAccess) {
                     return redirect()->route('patients.request-access', $patient->id)
                         ->with('warning', 'Vous n\'avez pas accès à ce dossier. Vous pouvez faire une demande d\'accès inter-service.');
                 }
             }
         }
-        
+
         $consultations = $patient->consultations()->orderBy('date_consultation', 'desc')->get();
 
         ActivityLog::create([
             'user_id' => Auth::id(),
+             'ip_address' => request()->ip(),
             'action' => 'Consultation du dossier',
             'patient_name' => $patient->nom . ' ' . $patient->prenom,
         ]);
@@ -328,10 +331,10 @@ class PatientController extends Controller
     public function destroy($id)
     {
         $patient = Patient::findOrFail($id);
-        
+
         $user = Auth::user();
         $isAdmin = $user->hasRole('admin') || $user->name === 'Administrateur';
-        
+
         // Vérifier l'accès
         if (!$isAdmin) {
             $userServices = $user->services()->pluck('services.id');
@@ -342,13 +345,13 @@ class PatientController extends Controller
                         $q->whereNull('expires_at')->orWhere('expires_at', '>', now());
                     })
                     ->exists();
-                
+
                 if (!$hasCrossAccess) {
                     abort(403, 'Accès non autorisé à ce patient.');
                 }
             }
         }
-        
+
         $patient->delete();
         return redirect()->route('patients.index')->with('success', 'Patient supprimé.');
     }

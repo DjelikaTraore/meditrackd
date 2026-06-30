@@ -23,11 +23,11 @@ class CrossServicePatientController extends Controller
     {
         $patient = Patient::with('service')->findOrFail($patientId);
         $user = Auth::user();
-        
+
         // Vérifier si l'utilisateur a déjà accès à ce service
         $userServices = $user->services()->pluck('services.id');
         $hasDirectAccess = $userServices->contains($patient->service_id);
-        
+
         if ($hasDirectAccess) {
             return redirect()->route('patients.show', $patientId)
                 ->with('info', 'Vous avez déjà accès à ce patient via votre service.');
@@ -76,6 +76,7 @@ class CrossServicePatientController extends Controller
         // Logger la demande d'accès
         ActivityLog::create([
             'user_id' => $user->id,
+            'ip_address' => request()->ip(),
             'action' => 'Accès inter-service accordé',
             'patient_name' => $patient->nom . ' ' . $patient->prenom,
             'details' => "Service cible: " . $patient->service->nom . ", Motif: " . $request->motif . ", Urgence: " . $request->urgence

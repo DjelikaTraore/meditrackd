@@ -21,16 +21,16 @@ class CrossServiceAccess
     {
         $user = Auth::user();
         $patientId = $request->route('patient') ? $request->route('patient')->id : $request->route('id');
-        
+
         if (!$patientId) {
             return $next($request);
         }
 
         $patient = Patient::with('service')->findOrFail($patientId);
-        
+
         // Vérifier si l'utilisateur est admin
         $isAdmin = $user->hasRole('admin') || $user->name === 'Administrateur';
-        
+
         if ($isAdmin) {
             return $next($request);
         }
@@ -61,6 +61,7 @@ class CrossServiceAccess
     {
         ActivityLog::create([
             'user_id' => $user->id,
+            'ip_address' => request()->ip(),
             'action' => 'Accès inter-service',
             'patient_name' => $patient->nom . ' ' . $patient->prenom,
             'details' => "Accès au service: " . $patient->service->name . " depuis le service: " . ($user->services->first()->name ?? 'Non assigné')

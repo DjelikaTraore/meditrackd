@@ -3,9 +3,12 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Factories\HasFactory; // AJOUT DE L'IMPORT
 
 class Ordonnance extends Model
 {
+    use HasFactory; // AJOUT DU TRAIT POUR LES FACTORIES
+
     // Ajoute cette ligne avec les noms exacts de tes colonnes
     protected $fillable = [
         'patient_id',

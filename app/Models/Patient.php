@@ -3,39 +3,44 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
-use Carbon\Carbon;//bibliotheque de date laravel
+use Illuminate\Database\Eloquent\Factories\HasFactory; // 1. AJOUT DE L'IMPORT
+use Carbon\Carbon; //bibliotheque de date laravel
 
 class Patient extends Model
 {
-   protected $fillable = [
-    'nom',
-    'prenom',
-    'sexe',
-    'date_naissance',
-    'telephone',
-    'adresse',
-    'groupe_sanguin',
-    'antecedents',
-    'is_critique',
-    'service_id',
-];
-public function consultations()
-{
-    return $this->hasMany(Consultation::class);
-}
-public function getAgeAttribute()//fonction pour calculer l'age
-{
-    if(!$this->date_naissance){
-        return '-';
-    }
-    return Carbon::parse($this->date_naissance)->age;
-}
-// Dans Patient.php
-public function ordonnances()
-{
+    use HasFactory; // 2. AJOUT DU TRAIT ICI POUR ACTIVER LES FACTORIES
 
-    return $this->hasMany(Ordonnance::class);
-}
+    protected $fillable = [
+        'nom',
+        'prenom',
+        'sexe',
+        'date_naissance',
+        'telephone',
+        'adresse',
+        'groupe_sanguin',
+        'antecedents',
+        'is_critique',
+        'service_id',
+    ];
+
+    public function consultations()
+    {
+        return $this->hasMany(Consultation::class);
+    }
+
+    public function getAgeAttribute() //fonction pour calculer l'age
+    {
+        if(!$this->date_naissance){
+            return '-';
+        }
+        return Carbon::parse($this->date_naissance)->age;
+    }
+
+    // Dans Patient.php
+    public function ordonnances()
+    {
+        return $this->hasMany(Ordonnance::class);
+    }
 
     public function service() {
         return $this->belongsTo(Service::class);
